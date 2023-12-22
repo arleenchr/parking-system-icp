@@ -1,0 +1,13 @@
+{
+    "canisters": {
+        "parking_system": {
+            "type": "custom",
+            "main": "src/index.ts",
+            "candid": "src/index.did",
+            "build": "npx azle parking_system",
+            "wasm": ".azle/parking_system/parking_system.wasm",
+            "gzip": true
+        }
+    }
+}
+
