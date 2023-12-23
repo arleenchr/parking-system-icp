@@ -42,8 +42,8 @@ type ParkingSlot = typeof ParkingSlot.tsType;
 type ParkingPayload = typeof ParkingPayload.tsType;
 
 const vehicles = StableBTreeMap<text, Vehicle>(0);
-const parkingArea = StableBTreeMap<text, ParkingSlot>(0);
-const parkingPayloads = StableBTreeMap<text, ParkingPayload>(0);
+const parkingArea = StableBTreeMap<text, ParkingSlot>(1);
+const parkingPayloads = StableBTreeMap<text, ParkingPayload>(2);
 
 function getParkingSlot(block: text, address: text): ParkingSlot {
     const parkSlot = parkingArea.values().filter(slot =>
@@ -78,7 +78,6 @@ export default Canister({
         for (const block of blocks){
             for (const address of addresses){
                 const slot = {id: uuidv4(), block: block, address: address, is_available: true};
-                console.log(`Created parking slot: ${JSON.stringify(slot)}`);
                 parkingArea.insert(slot.id, slot);
             }
         }
@@ -118,7 +117,7 @@ export default Canister({
         const payload = getParkingPayload(slot_block, slot_addr, vehicle_number);
         const end = ic.time();
         const rate = vehicle.vehicle_type=="Car" ? 3000 : (vehicle.vehicle_type=="Motorcycle" ? 1500 : 1000);
-        const price = (end - payload.start) * BigInt(rate);
+        const price = BigInt(Math.ceil((Number(end) - Number(payload.start)) / 1e9 / 60 / 60) * Number(rate));
         payload.price = Some(price);
         return Ok(payload);
     }),
