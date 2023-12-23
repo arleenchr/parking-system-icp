@@ -71,6 +71,15 @@ function getParkingPayload(slot_block: text, slot_addr: text, vehicle_number: te
     return payload[0];
 }
 
+function setSlotAvailability(slot_block: text, slot_addr: text, availability: bool): Void {
+    const slot = getParkingSlot(slot_block, slot_addr);
+    const slotOpt = parkingArea.get(slot.id);
+    const parkSlot = slotOpt.Some;
+    if (parkSlot){
+        parkSlot.is_available = availability;
+    }
+}
+
 export default Canister({
     initParkingArea: update([], Void, () => {
         const blocks = ["A1", "A2", "A3", "B1", "B2", "B3", "C1", "C2", "C3"]
@@ -102,6 +111,7 @@ export default Canister({
             price: None,
         };
         parkingPayloads.insert(parkPayload.id, parkPayload);
+        setSlotAvailability(slot_block, slot_addr, false);
         return Ok(parkPayload);
     }),
 
@@ -119,6 +129,7 @@ export default Canister({
         const rate = vehicle.vehicle_type=="Car" ? 3000 : (vehicle.vehicle_type=="Motorcycle" ? 1500 : 1000);
         const price = BigInt(Math.ceil((Number(end) - Number(payload.start)) / 1e9 / 60 / 60) * Number(rate));
         payload.price = Some(price);
+        setSlotAvailability(slot_block, slot_addr, true);
         return Ok(payload);
     }),
 });
