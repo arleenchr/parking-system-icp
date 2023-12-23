@@ -1,0 +1,5 @@
+service: () -> {
+    getParkingArea: () -> (vec record {id:text; address:text; is_available:bool; block:text}) query;
+    getVehicleType: () -> (vec record {name:text; rate:nat64}) query;
+    initParkingArea: () -> ();
+}
