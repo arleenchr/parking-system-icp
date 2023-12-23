@@ -1,120 +1,126 @@
-import { Canister, Record, Variant, Opt, query, text, update, Void, int, bool, nat64, StableBTreeMap, Vec, Result, Ok } from 'azle';
+import { Canister, Record, Variant, Opt, query, text, update, Void, int, bool, nat64, StableBTreeMap, Vec, Result, Ok, Err, Some, ic, None } from 'azle';
 import { v4 as uuidv4 } from "uuid";
 
-// This is a global variable that is stored on the heap
-// let message = '';
+enum vehicleType {
+    Car = "Car",
+    Motorcycle = "Motorcycle",
+    Bicycle = "Bicycle",
+}
 
-// type VehicleType = "car" | "motorcycle" | "bicycle";
-const vehicleType: {name: text, rate: nat64}[] = [
-    {
-        name: "car",
-        rate: 3000n,
-    },
-    {
-        name: "motorcycle",
-        rate: 1500n,
-    },
-    {
-        name: "bicycle",
-        rate: 1000n
-    }
-];
-
-const vehicle = Record({
+const Vehicle = Record({
     id: text,
-    owner: text,
-    vehicle_type: Record({
-        name: text,
-        rate: nat64,
-    })
+    number: text,
+    vehicle_type: text
 });
 
-// interface ParkingSlot {
-//     id: string;
-//     block: string;
-//     address: string;
-//     is_available: boolean;
-// }
-
-const parkingSlot = Record({
+const ParkingSlot = Record({
     id: text,
     block: text,
     address: text,
     is_available: bool,
 });
 
-const parkingPayload = Record({
+const ParkingPayload = Record({
     id: text,
-    slot: Record({
-        id: text,
-        address: text,
-        status: bool,
-    }),
-    vehicle: Record({
-        id: text,
-        owner: text,
-        vehicle_type: Record({
-            name: text,
-            rate: nat64,
-        }),
-    }),
+    slot: ParkingSlot,
+    vehicle: Vehicle,
     start: nat64,
-    end: nat64,
-    price: nat64,
+    price: Opt(nat64),
 });
 
 const Error = Variant({
     NotFound: text,
     InvalidPayload: text,
-    InsufficientFunds: text,
-    ProjectNotOpen: text,
-    ProjectExpired: text,
+    InvalidSlot: text,
+    PayloadExpired: text,
 });
 
-type VehicleType = typeof vehicleType | any;
-type Vehicle = typeof vehicle | object;
-// type ParkingSlot = typeof parkingSlot;
-type ParkingPayload = typeof parkingPayload | object;
+type Error = typeof Error.tsType;
 
-// const parkingArea = StableBTreeMap<text, ParkingSlot>(0);
-const parkingArea = StableBTreeMap(text, parkingSlot, 0);
-// let parkingPayloads = StableBTreeMap<text, ParkingPayload>(0);
+type Vehicle = typeof Vehicle.tsType;
+type ParkingSlot = typeof ParkingSlot.tsType;
+type ParkingPayload = typeof ParkingPayload.tsType;
+
+const vehicles = StableBTreeMap<text, Vehicle>(0);
+const parkingArea = StableBTreeMap<text, ParkingSlot>(0);
+const parkingPayloads = StableBTreeMap<text, ParkingPayload>(0);
+
+function getParkingSlot(block: text, address: text): ParkingSlot {
+    const parkSlot = parkingArea.values().filter(slot =>
+        slot.block == block && slot.address == address);
+    return parkSlot[0];
+}
+
+function createVehicle(vehicleNumber: text, vehicleType: text): Vehicle {
+    const vehicle = {
+        id: uuidv4(),
+        number: vehicleNumber,
+        vehicle_type: vehicleType,
+    }
+    return vehicle;
+}
+
+function getVehicle(vehicleNumber: text): Vehicle {
+    const vehicle = vehicles.values().filter(v => v.number == vehicleNumber);
+    return vehicle[0];
+}
+
+function getParkingPayload(slot_block: text, slot_addr: text, vehicle_number: text): ParkingPayload {
+    const payload = parkingPayloads.values().filter(p =>
+        p.slot.block == slot_block && p.slot.address == slot_addr && p.vehicle.number == vehicle_number);
+    return payload[0];
+}
 
 export default Canister({
     initParkingArea: update([], Void, () => {
         const blocks = ["A1", "A2", "A3", "B1", "B2", "B3", "C1", "C2", "C3"]
         const addresses = ["0", "1", "2", "3", "4"]
-        for (const block in blocks){
-            for (const address in addresses){
-                let parkingSlot = {id: uuidv4(), block: block, address: address, is_available: true};
-                parkingArea.insert(parkingSlot.id, parkingSlot);
+        for (const block of blocks){
+            for (const address of addresses){
+                const slot = {id: uuidv4(), block: block, address: address, is_available: true};
+                console.log(`Created parking slot: ${JSON.stringify(slot)}`);
+                parkingArea.insert(slot.id, slot);
             }
         }
     }),
-    getParkingArea: query ([], Result(Vec(parkingSlot), Error), () => {
-        return Ok(parkingArea.values());
-    }),
-    getVehicleType: query([], Vec(Record({name: text, rate: nat64})), () => {
-        return vehicleType;
-    }),
-    addParkingSlot: update([parkingSlot], Result(parkingSlot, Error), (payload) => {
-        const patient = { ...payload };
-        parkingArea.insert(patient.id, patient);
-        return Ok(patient);
+
+    rentParkingSlot: update([text, text, text, text], Result(ParkingPayload, Error), (slot_block, slot_addr, vehicle_number, vehicle_type) => {
+        const slotArea = getParkingSlot(slot_block, slot_addr);
+        if (!slotArea){
+            return Err({ InvalidSlot: `Parking block or addr slot is invalid.`})
+        }
+        const vehicle = createVehicle(vehicle_number, vehicle_type);
+        vehicles.insert(vehicle.id, vehicle);
+        if (slotArea.is_available == false){
+            return Err({ InvalidPayload: `Parking payload slot is not available.`})
+        }
+        const parkPayload = {
+            id: uuidv4(),
+            slot: slotArea,
+            vehicle: vehicle,
+            start: ic.time(),
+            end: None,
+            price: None,
+        };
+        parkingPayloads.insert(parkPayload.id, parkPayload);
+        return Ok(parkPayload);
     }),
 
-    // addParkingSlot: update([text, text, text, bool], Void, (id, block, address, is_available) => {
-    //     const slot: ParkingSlot = Record({
-    //         id,
-    //         block,
-    //         address,
-    //         is_available,
-    //     });
-    //     parkingArea.insert(slot.id, slot);
-    // }),
-    // getParkingSlot: query([text], text, (id) => {
-    //     const slot: ParkingSlot = parkingArea.get(id);
-    //     return ("id: " + id + ", address: " + slot.address + ", status: " + slot.is_available);
-    // }),
+    exitParkingSlot: update([text, text, text], Result(ParkingPayload, Error), (slot_block, slot_addr, vehicle_number) => {
+        const slotArea = getParkingSlot(slot_block, slot_addr);
+        if (!slotArea){
+            return Err({ InvalidSlot: `Parking block or addr slot is invalid.`})
+        }
+        const vehicle = getVehicle(vehicle_number);
+        if (slotArea.is_available == false){
+            return Err({ InvalidPayload: `Parking payload slot is not available.`})
+        }
+        const payload = getParkingPayload(slot_block, slot_addr, vehicle_number);
+        const end = ic.time();
+        const rate = vehicle.vehicle_type=="Car" ? 3000 : (vehicle.vehicle_type=="Motorcycle" ? 1500 : 1000);
+        const price = (end - payload.start) * BigInt(rate);
+        payload.price = Some(price);
+        return Ok(payload);
+    }),
 });
 

@@ -1,5 +1,5 @@
 service: () -> {
-    getParkingArea: () -> (vec record {id:text; address:text; is_available:bool; block:text}) query;
-    getVehicleType: () -> (vec record {name:text; rate:nat64}) query;
+    exitParkingSlot: (text, text, text) -> (variant {Ok:record {id:text; slot:record {id:text; address:text; is_available:bool; block:text}; start:nat64; vehicle:record {id:text; number:text; vehicle_type:text}; price:opt nat64}; Err:variant {PayloadExpired:text; InvalidPayload:text; NotFound:text; InvalidSlot:text}});
     initParkingArea: () -> ();
+    rentParkingSlot: (text, text, text, text) -> (variant {Ok:record {id:text; slot:record {id:text; address:text; is_available:bool; block:text}; start:nat64; vehicle:record {id:text; number:text; vehicle_type:text}; price:opt nat64}; Err:variant {PayloadExpired:text; InvalidPayload:text; NotFound:text; InvalidSlot:text}});
 }
